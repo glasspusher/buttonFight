@@ -6,20 +6,27 @@ Imports Newtonsoft.Json.Linq
 
 Public Class Form1
     Private wsServer As Uri
-    Private secs As Integer
+    Private secs, x, y As Integer
     Private oldSecsLeft As Integer
     Private hasTicked As Boolean = False
     Private hasBeenClicked As Boolean = False
     Private fieldBMP As Bitmap
-    Private yList As New List(Of Integer)
-    Private yIdx, y As Integer
+    Private y1List As New List(Of Integer)
+    Private y1Idx As Integer
+    Private y2List As New List(Of Integer)
+    Private y2Idx As Integer
     Private rnd As New Random()
     Private g As Graphics
     Private b As New SolidBrush(Color.White)
-    Private players As Integer = 1
+    Private players1 As Integer = 1
+    Private players2 As Integer = 0
+    Private players As Integer = players1 + players2
     Private multi As Integer = 40
     Private fnt As New Font("Courier", 20)
     Private strBr As New SolidBrush(Color.Gray)
+    Private gameReady As Boolean = False
+    Private side As Integer = 2
+
 
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
@@ -41,14 +48,15 @@ Public Class Form1
         wsServer = New Uri(m.Value.Trim(""""))
 
         For i As Integer = 0 To (picField.Height / multi) - 1
-            yList.Add(i)
+            y1List.Add(i)
+            y2List.Add(i)
         Next
 
-        yIdx = rnd.Next(0, yList.Count)
-        y = yList(yIdx) * multi
-        yList.RemoveAt(yIdx)
+        y1Idx = rnd.Next(0, y1List.Count)
+        y = y1List(y1Idx) * multi
+        y1List.RemoveAt(y1Idx)
 
-        Debug.WriteLine("first y:" & y.ToString)
+        Debug.WriteLine("first y:" & y.ToString & "Adding player 1, side 1")
 
 
     End Sub
@@ -62,7 +70,7 @@ Public Class Form1
 
             Await ws.ConnectAsync(wsServer, CancellationToken.None)
 
-            While yList.Count <> 0
+            While True
                 Dim bytesReceived As New ArraySegment(Of Byte)(New Byte(1023) {})
                 result = Await ws.ReceiveAsync(bytesReceived, CancellationToken.None)
                 Dim s As String = Encoding.UTF8.GetString(bytesReceived.Array)
@@ -73,12 +81,30 @@ Public Class Form1
                 secs = CInt(json.SelectToken("payload").SelectToken("seconds_left"))
 
                 If hasTicked AndAlso secs >= oldSecsLeft Then
-                    yIdx = rnd.Next(0, yList.Count - 1)
-                    y = yList(yIdx) * multi
-                    yList.RemoveAt(yIdx)
 
-                    Debug.WriteLine("button has been clicked! new y:" & y.ToString)
-                    players += 1
+                    If players + 1 > (picField.Height / multi) * 2 Then
+                        Exit While
+                    End If
+
+                    If side = 1 Then
+                        players1 += 1
+                        Debug.WriteLine("button has been clicked! new y:" & y.ToString & "   Adding player: " & players1.ToString & ", side: " & side.ToString)
+                        y1Idx = rnd.Next(0, y1List.Count - 1)
+                        x = 0
+                        y = y1List(y1Idx) * multi
+                        y1List.RemoveAt(y1Idx)
+                        side = 2
+                    Else
+                        players2 += 1
+                        Debug.WriteLine("button has been clicked! new y:" & y.ToString & "   Adding player: " & players2.ToString & ", side: " & side.ToString)
+                        y2Idx = rnd.Next(0, y2List.Count - 1)
+                        x = picField.Width - multi - 1
+                        y = y2List(y2Idx) * multi
+                        y2List.RemoveAt(y2Idx)
+                        side = 1
+                    End If
+
+                    players = players1 + players2
 
                     lblPlayers.Text = "Players: " & players.ToString
                 Else
@@ -108,8 +134,8 @@ Public Class Form1
 
                 b.Color = clr
 
-                g.FillRectangle(b, 0, y, multi, multi)
-                g.DrawString(secs.ToString, fnt, strBr, New PointF(0, y + 3))
+                g.FillRectangle(b, x, y, multi, multi)
+                g.DrawString(secs.ToString, fnt, strBr, New PointF(x, y + 3))
 
                 picField.Image = fieldBMP
                 picField.Refresh()
